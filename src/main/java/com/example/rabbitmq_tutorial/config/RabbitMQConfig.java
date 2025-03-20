@@ -5,9 +5,17 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * RabbitMQ Configuration class that sets up exchanges, queues, and their
+ * bindings.
+ * This configuration demonstrates different types of exchanges (Direct, Topic,
+ * Fanout)
+ * and implements Dead Letter Queue (DLQ) pattern for handling failed messages.
+ */
 @Configuration
 public class RabbitMQConfig {
 
+    // Constants for queue and exchange names
     public static final String QUEUE_NAME = "queueSamet";
     public static final String DLX_NAME = "deadLetterExchangeSamet";
     public static final String DLQ_MESSAGES_QUEUE = "queueSamet.dlq";
@@ -15,120 +23,176 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY = "routingKeySamet";
     public static final String DLQ_ROUTING_KEY = "dlqRoutingKeySamet";
 
-    // Ana kuyruğu oluşturur (Direct Exchange için kullanılır)
+    /**
+     * Creates the main queue with Dead Letter Exchange configuration.
+     * Messages that fail processing will be redirected to DLQ.
+     * 
+     * @return Queue configured with DLX settings
+     */
     @Bean
     public Queue queue() {
         return QueueBuilder.durable(QUEUE_NAME)
-                .withArgument("x-dead-letter-exchange", DLX_NAME) // Bind queue to DLX
-                .withArgument("x-dead-letter-routing-key", DLQ_ROUTING_KEY) // Route to DLQ
+                .withArgument("x-dead-letter-exchange", DLX_NAME)
+                .withArgument("x-dead-letter-routing-key", DLQ_ROUTING_KEY)
                 .build();
     }
 
-    // Error logları için ayrı bir kuyruk oluşturur (Topic Exchange kullanacak)
+    /**
+     * Creates a queue specifically for error logs.
+     * Used with Topic Exchange to capture error-specific messages.
+     */
     @Bean
     public Queue errorQueue() {
         return new Queue("errorQueue", true);
     }
 
-    // Tüm logları dinleyecek genel bir kuyruk oluşturur (Topic Exchange kullanacak)
+    /**
+     * Creates a queue that captures all types of logs.
+     * Used with Topic Exchange to capture all log messages using wildcard routing.
+     */
     @Bean
     public Queue allLogsQueue() {
         return new Queue("allLogsQueue", true);
     }
 
-    // SMS gönderimleri için ayrı bir kuyruk oluşturur (Fanout Exchange kullanacak)
+    /**
+     * Creates a queue for SMS notifications.
+     * Part of the Fanout Exchange pattern for broadcast messaging.
+     */
     @Bean
     public Queue smsQueue() {
         return new Queue("smsQueue", true);
     }
 
-    // E-posta gönderimleri için ayrı bir kuyruk oluşturur (Fanout Exchange kullanacak)
+    /**
+     * Creates a queue for email notifications.
+     * Part of the Fanout Exchange pattern for broadcast messaging.
+     */
     @Bean
     public Queue emailQueue() {
         return new Queue("emailQueue", true);
     }
 
-    // Push bildirimleri için ayrı bir kuyruk oluşturur (Fanout Exchange kullanacak)
+    /**
+     * Creates a queue for push notifications.
+     * Part of the Fanout Exchange pattern for broadcast messaging.
+     */
     @Bean
     public Queue pushNotificationQueue() {
         return new Queue("pushNotificationQueue", true);
     }
 
-    // DLQ (Dead Letter Queue) tanımlıyoruz
+    /**
+     * Creates the Dead Letter Queue (DLQ) for handling failed messages.
+     * Messages that fail processing in the main queue will be redirected here.
+     */
     @Bean
     public Queue deadLetterQueue() {
         return new Queue(DLQ_MESSAGES_QUEUE, true);
     }
 
-
-    // Direct Exchange oluşturur (Routing Key tam eşleşme ile çalışır)
+    /**
+     * Creates a Direct Exchange for point-to-point messaging.
+     * Messages are routed to queues based on exact routing key matches.
+     */
     @Bean
     public DirectExchange exchange() {
         return new DirectExchange(EXCHANGE_NAME);
     }
 
-    // Topic Exchange oluşturur (Routing Key desenleriyle çalışır)
+    /**
+     * Creates a Topic Exchange for pattern-based message routing.
+     * Supports wildcard routing patterns (*, #) for flexible message distribution.
+     */
     @Bean
     public TopicExchange topicExchange() {
         return new TopicExchange("topicExchangeSamet");
     }
 
-    // Fanout Exchange oluşturur (Tüm kuyruklara mesajı gönderir)
+    /**
+     * Creates a Fanout Exchange for broadcast messaging.
+     * Messages sent to this exchange are distributed to all bound queues.
+     */
     @Bean
     public FanoutExchange fanoutExchange() {
         return new FanoutExchange("fanoutExchangeSamet");
     }
 
+    /**
+     * Creates the Dead Letter Exchange for handling failed messages.
+     */
     @Bean
     public DirectExchange deadLetterExchange() {
         return new DirectExchange(DLX_NAME);
     }
 
-
-    // Ana kuyruğu Direct Exchange'e bağlar (Sadece tam eşleşen Routing Key ile çalışır)
+    /**
+     * Binds the main queue to the Direct Exchange.
+     * Messages will be routed based on exact routing key matches.
+     */
     @Bean
     public Binding binding(Queue queue, DirectExchange exchange) {
         return BindingBuilder.bind(queue).to(exchange).with(ROUTING_KEY);
     }
 
-    // "errorQueue" kuyruğunu Topic Exchange'e bağlar (Sadece "log.error" mesajlarını alır)
+    /**
+     * Binds the error queue to the Topic Exchange.
+     * Captures messages with routing key "log.error".
+     */
     @Bean
     public Binding bindErrorQueue() {
         return BindingBuilder.bind(errorQueue()).to(topicExchange()).with("log.error");
     }
 
-    // "allLogsQueue" kuyruğunu Topic Exchange'e bağlar (Tüm "log.#" pattern'lerine uyan mesajları alır)
+    /**
+     * Binds the all-logs queue to the Topic Exchange.
+     * Captures all messages with routing keys matching "log.#" pattern.
+     */
     @Bean
     public Binding bindAllLogsQueue() {
         return BindingBuilder.bind(allLogsQueue()).to(topicExchange()).with("log.#");
     }
 
-    // SMS kuyruğunu Fanout Exchange'e bağlar (Tüm kuyruklara mesajı gönderir)
+    /**
+     * Binds the SMS queue to the Fanout Exchange.
+     * Will receive all messages published to the Fanout Exchange.
+     */
     @Bean
     public Binding bindSmsQueue() {
         return BindingBuilder.bind(smsQueue()).to(fanoutExchange());
     }
 
-    // E-posta kuyruğunu Fanout Exchange'e bağlar (Tüm kuyruklara mesajı gönderir)
+    /**
+     * Binds the email queue to the Fanout Exchange.
+     * Will receive all messages published to the Fanout Exchange.
+     */
     @Bean
     public Binding bindEmailQueue() {
         return BindingBuilder.bind(emailQueue()).to(fanoutExchange());
     }
 
-    // Push bildirim kuyruğunu Fanout Exchange'e bağlar (Tüm kuyruklara mesajı gönderir)
+    /**
+     * Binds the push notification queue to the Fanout Exchange.
+     * Will receive all messages published to the Fanout Exchange.
+     */
     @Bean
     public Binding bindPushNotificationQueue() {
         return BindingBuilder.bind(pushNotificationQueue()).to(fanoutExchange());
     }
 
-    // Bind the DLQ to the Dead Letter Exchange
+    /**
+     * Binds the Dead Letter Queue to the Dead Letter Exchange.
+     * Failed messages will be routed here using the DLQ routing key.
+     */
     @Bean
     public Binding deadLetterBinding() {
         return BindingBuilder.bind(deadLetterQueue()).to(deadLetterExchange()).with(DLQ_ROUTING_KEY);
     }
 
-
-    // Mesajları JSON formatında göndermek ve almak için JSON Converter tanımlar
+    /**
+     * Configures message conversion to JSON format.
+     * Enables automatic conversion of messages to and from JSON format.
+     */
     @Bean
     public Jackson2JsonMessageConverter messageConverter() {
         return new Jackson2JsonMessageConverter();
