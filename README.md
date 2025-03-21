@@ -1,4 +1,4 @@
-# RabbitMQ Spring Boot Project Documentation
+# RabbitMQ Spring Boot Project Template Documentation
 
 ## Getting Started
 1. Start the RabbitMQ container on Docker.
